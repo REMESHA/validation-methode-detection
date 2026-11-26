@@ -1,0 +1,22 @@
+Type: Project
+Package: validationmethodedetection
+Title: Validation statistique d'une methode de detection de contaminants (donnees simulees)
+Version: 1.0.0
+Authors@R: person("Guy Darcy", "Remesha", role = c("aut", "cre"),
+    email = "guydarcyremesha@gmail.com",
+    comment = c(ORCID = "0009-0005-1801-3787"))
+Description: Projet de demonstration : POD, dPOD, LOD50, RLOD, etude
+    interlaboratoires, plans d'experiences (criblage et surface de reponse),
+    pipeline automatise avec controles qualite et tracabilite.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Imports:
+    yaml,
+    digest,
+    ggplot2,
+    lme4,
+    FrF2,
+    rsm,
+    knitr,
+    rmarkdown,
+    testthat

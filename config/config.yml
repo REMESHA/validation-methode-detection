@@ -1,0 +1,106 @@
+# =====================================================================
+# Fichier de configuration du projet
+# ---------------------------------------------------------------------
+# Tous les paramètres sont ici, et non dans le code.
+# Pour changer un seuil ou une graine, modifier ce fichier puis relancer
+# le pipeline : c'est plus sûr et c'est tracé (le fichier est versionné).
+# =====================================================================
+
+projet:
+  nom: "Validation d'une méthode de détection de contaminants (données simulées)"
+  version_protocole: "1.0"
+
+# Graine du générateur aléatoire : même graine = mêmes données simulées.
+graine: 2026
+
+# ---------------------------------------------------------------------
+# Règles de lecture du signal de la méthode candidate
+# ---------------------------------------------------------------------
+signal:
+  unite: "RFU"              # Relative Fluorescence Units (unité arbitraire)
+  seuil_positivite: 1000    # signal >= seuil  => résultat "positif"
+  minimum_possible: 0       # un signal négatif est impossible => anomalie
+  saturation: 65535         # valeur maximale d'un détecteur 16 bits
+
+# ---------------------------------------------------------------------
+# Contrôles qualité appliqués aux fichiers bruts
+# ---------------------------------------------------------------------
+controle_qualite:
+  colonnes_instrument: [id_echantillon, etude, matrice, niveau_cible,
+                        laboratoire, operateur, instrument, date_analyse,
+                        signal_rfu]
+  colonnes_reference:  [id_echantillon, etude, matrice, niveau_cible,
+                        laboratoire, date_analyse, resultat_ref]
+  valeurs_reference_autorisees: [positif, negatif]
+  date_debut_etude: "2026-01-05"
+  date_fin_etude:   "2026-03-27"
+
+# ---------------------------------------------------------------------
+# Plan de l'étude de matrice (logique inspirée de l'AOAC Appendix J)
+# 5 portions non inoculées, 20 au niveau bas (résultats fractionnaires),
+# 5 au niveau haut, pour chaque méthode et chaque matrice.
+# ---------------------------------------------------------------------
+etude_matrice:
+  matrices: [acier_inoxydable, plastique]
+  niveaux_ufc: {non_inocule: 0, bas: 1.2, haut: 10}
+  replicats:   {non_inocule: 5, bas: 20, haut: 5}
+
+# Étude dédiée au niveau de détection (plusieurs niveaux pour la courbe)
+etude_lod:
+  matrice: acier_inoxydable
+  niveaux_ufc: [0.25, 0.5, 1, 2, 4]
+  replicats: 20
+
+# Étude interlaboratoires simulée
+etude_interlabo:
+  matrice: acier_inoxydable
+  n_laboratoires: 12
+  niveaux_ufc: {non_inocule: 0, bas: 1.2, haut: 10}
+  replicats: 12
+
+# ---------------------------------------------------------------------
+# "Vérité" de la simulation. Dans une vraie étude, ces valeurs sont
+# INCONNUES : c'est justement ce que l'analyse cherche à estimer.
+# On les garde ici pour vérifier que nos méthodes retrouvent la vérité.
+# ---------------------------------------------------------------------
+verite_simulation:
+  # Probabilité qu'une cellule présente dans la portion soit détectée
+  efficacite_cellule: {candidate: 0.60, reference: 0.50}
+  # Facteur multiplicatif selon la matrice (récupération plus faible
+  # sur plastique)
+  effet_matrice: {acier_inoxydable: 1.00, plastique: 0.85}
+  # Variabilité entre laboratoires (écart-type sur l'échelle log)
+  sd_laboratoire_log: 0.30
+  # Signal (log10 RFU) quand la cible est détectée / quand elle ne l'est pas
+  log10_signal_detecte: {moyenne: 4.0, ecart_type: 0.25}
+  log10_signal_fond:    {moyenne: 2.3, ecart_type: 0.30}
+  # Faux positifs de la méthode de référence (culture)
+  taux_faux_positif_reference: 0.0
+
+# ---------------------------------------------------------------------
+# Plans d'expériences (partie 2)
+# ---------------------------------------------------------------------
+plan_experiences:
+  facteurs:
+    temperature: {bas: 30, haut: 37, unite: "°C"}
+    duree_enrichissement: {bas: 6, haut: 18, unite: "h"}
+    concentration_substrat: {bas: 0.5, haut: 2.0, unite: "mM"}
+    volume_echantillon: {bas: 0.5, haut: 2.0, unite: "mL"}
+    gain_detecteur: {bas: 1, haut: 3, unite: "niveau"}
+  n_points_centraux_criblage: 4
+  ecart_type_bruit: 0.6
+  # Limites physiques de l'appareil et du protocole : AUCUN essai ne
+  # doit sortir de ces plages. Le plan composite les vérifie avant de
+  # proposer des essais (points axiaux "rotatables" à +/- 1,414, sinon
+  # points axiaux sur les faces du carré, à +/- 1).
+  limites_physiques:
+    temperature: {min: 25, max: 42}
+    duree_enrichissement: {min: 2, max: 24}
+
+# ---------------------------------------------------------------------
+# Vérification de reproductibilité (script 09)
+# Écart relatif toléré entre cette exécution et la référence, pour les
+# nombres. Au-delà, le fichier est signalé "DIFFÉRENT" (non bloquant).
+# ---------------------------------------------------------------------
+reproductibilite:
+  tolerance_relative: 1.0e-6

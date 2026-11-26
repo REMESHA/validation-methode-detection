@@ -1,0 +1,7 @@
+"fichier","id_echantillon","regle","gravite","detail"
+"matrice_acier_inoxydable.csv","MAT-ACI-0007","doublon_exact","bloquant","ligne identique déjà présente : copie exclue"
+"matrice_acier_inoxydable.csv","MAT-ACI-0019","date_hors_periode","bloquant","date '2025-12-01' hors de la période 2026-01-05 - 2026-03-27 (à vérifier avec le laboratoire)"
+"matrice_acier_inoxydable.csv","MAT-ACI-0003","signal_manquant","bloquant","aucune valeur de signal"
+"matrice_acier_inoxydable.csv","MAT-ACI-0011","signal_impossible","bloquant","signal = -15 RFU"
+"matrice_acier_inoxydable.csv","MAT-ACI-0015","signal_sature","avertissement","signal au maximum du détecteur : résultat gardé (positif)"
+"matrice_acier_inoxydable.csv","MAT-ACI-0034","resultat_non_autorise","bloquant","valeur 'pos' (attendu : positif ou negatif)"

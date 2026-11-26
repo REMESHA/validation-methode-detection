@@ -1,0 +1,9 @@
+"fichier","methode","lignes_lues","lignes_exclues"
+"interlabo_acier_inoxydable.csv","candidate",432,0
+"lod_acier_inoxydable.csv","candidate",100,0
+"matrice_acier_inoxydable.csv","candidate",31,4
+"matrice_plastique.csv","candidate",30,0
+"interlabo_acier_inoxydable.csv","reference",432,0
+"lod_acier_inoxydable.csv","reference",100,0
+"matrice_acier_inoxydable.csv","reference",30,1
+"matrice_plastique.csv","reference",30,0

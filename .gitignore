@@ -1,0 +1,12 @@
+# Fichiers de session R
+.Rhistory
+.RData
+.Rproj.user/
+# Rapport généré (il est reconstruit par GitHub Actions)
+rapport/index.html
+rapport/index_files/
+rapport/.quarto/
+/.quarto/
+# Fichiers système
+.DS_Store
+Thumbs.db

@@ -1,0 +1,5 @@
+"parametre","estimation","ic_bas","ic_haut","valeur_vraie_simulation","vraie_valeur_dans_ic"
+"LOD50 référence (laboratoire médian, UFC)",1.18727401528893,0.889933492692677,1.57602199828274,1.38629436111989,TRUE
+"LOD50 candidate (laboratoire médian, UFC)",1.11303826905546,0.832981455243292,1.48254415874512,1.15524530093324,TRUE
+"RLOD (candidate / référence)",0.937481314533644,0.695656802835844,1.26349499073003,0.833333333333333,TRUE
+"Écart-type entre laboratoires (échelle log)",0.311620337511366,0.100994222316109,0.591768723561092,0.3,TRUE

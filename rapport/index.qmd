@@ -1,0 +1,463 @@
+---
+title: "Validation statistique d'une méthode de détection de contaminants"
+subtitle: "Projet de démonstration sur données simulées (démarche inspirée de l'AOAC Appendix J)"
+author: "Guy Darcy Remesha"
+date: today
+date-format: "D MMMM YYYY"
+lang: fr
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    embed-resources: true
+    code-fold: true
+    theme: cosmo
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: chargement
+racine <- ".."
+lire <- function(nom) readRDS(file.path(racine, "output", "resultats", nom))
+fig  <- function(nom) file.path(racine, "output", "figures", nom)
+cfg  <- yaml::read_yaml(file.path(racine, "config", "config.yml"),
+                        fileEncoding = "UTF-8")
+qc   <- lire("qc.rds")
+mat  <- lire("etude_matrice.rds")
+lod  <- lire("lod50.rds")
+il   <- lire("interlabo.rds")
+crib <- lire("plan_criblage.rds")
+ccd  <- lire("plan_composite.rds")
+dico <- lire("dictionnaire.rds")
+repro <- lire("reproductibilite.rds")
+
+f2 <- function(x, d = 2) formatC(x, format = "f", digits = d, decimal.mark = ",")
+pc <- function(x, d = 0) paste0(formatC(100 * x, format = "f", digits = d,
+                                        decimal.mark = ","), " %")
+tableau <- function(d, ...) knitr::kable(d, format.args = list(decimal.mark = ","), ...)
+```
+
+::: {.callout-warning}
+## Données simulées
+
+Toutes les données de ce rapport sont **fictives**, produites par simulation
+(script `scripts/01_simuler_donnees_brutes.R`). La méthode « candidate », la
+méthode de référence et le banc d'essai n'existent pas. Le but est de montrer
+une **démarche statistique** de validation, pas de valider une vraie méthode.
+La démarche s'inspire des lignes directrices AOAC (Appendix J) sans prétendre
+les appliquer en entier.
+:::
+
+# Contexte
+
+Une méthode rapide de détection de contaminants bactériens sur des surfaces
+(« méthode candidate ») mesure un signal de fluorescence dans une chambre
+optique. Une portion est déclarée **positive** si le signal dépasse
+`r cfg$signal$seuil_positivite` `r cfg$signal$unite`. On la compare à une
+méthode de **référence** par culture.
+
+Le projet couvre trois questions :
+
+1. **Validation** : la méthode candidate détecte-t-elle aussi bien que la
+   référence ? (POD, dPOD, LOD50, RLOD, étude interlaboratoires)
+2. **Optimisation** : quels paramètres physiques améliorent le signal, et
+   quels sont les meilleurs réglages ? (plans d'expériences)
+3. **Automatisation, traçabilité et reproductibilité** : chaîne d'analyse
+   unique, de la simulation des données jusqu'aux résultats, avec contrôles
+   qualité, dictionnaire des variables contrôlé automatiquement, journal et
+   vérification que chaque exécution redonne les mêmes résultats.
+
+```{r}
+#| label: chaine
+tableau(data.frame(
+  Étape = sprintf("%02d", 1:9),
+  Script = c("01_simuler_donnees_brutes", "02_controle_qualite",
+             "03_etude_matrice_pod", "04_niveau_detection_lod50",
+             "05_etude_interlaboratoires", "06_plan_criblage",
+             "07_plan_composite_surface", "08_dictionnaire_variables",
+             "09_verification_reproductibilite"),
+  Rôle = c("Simulation des fichiers bruts (graine fixe)",
+           "Contrôles qualité, classement positif/négatif, empreintes",
+           "POD et dPOD", "LOD50 et RLOD", "LPOD, dLPOD, modèle mixte",
+           "Plan fractionnaire 2^5-1", "Plan composite et surface de réponse",
+           "Dictionnaire, contrôle et restitution des variables",
+           "Comparaison avec l'exécution de référence")))
+```
+
+# Contrôle qualité des données brutes
+
+```{r}
+#| label: qc
+tableau(qc$bilan, col.names = c("Fichier", "Méthode", "Lignes lues",
+                                "Lignes exclues"))
+```
+
+Le pipeline a relevé **`r nrow(qc$anomalies)` anomalie(s)**, dont
+`r sum(qc$anomalies$gravite == "bloquant")` bloquante(s) (ligne exclue de
+l'analyse) et `r sum(qc$anomalies$gravite == "avertissement")`
+avertissement(s) (ligne gardée mais signalée). Aucune donnée n'est corrigée en
+silence : chaque problème est écrit dans le registre ci-dessous, qui sert de
+base aux échanges avec le laboratoire.
+
+```{r}
+#| label: anomalies
+tableau(qc$anomalies[, c("fichier", "id_echantillon", "regle", "gravite",
+                         "detail")],
+        col.names = c("Fichier", "Échantillon", "Règle", "Gravité", "Détail"))
+```
+
+![Distribution du signal de la méthode candidate et seuil de positivité](`r fig("distribution_signal.png")`)
+
+# Étude de matrice : POD et dPOD
+
+**Plan** (pour chaque matrice et chaque méthode) : 5 portions non inoculées,
+20 portions au niveau bas (`r f2(cfg$etude_matrice$niveaux_ufc$bas, 1)` UFC par
+portion en moyenne), 5 portions au niveau haut
+(`r cfg$etude_matrice$niveaux_ufc$haut` UFC). Le niveau bas doit donner des
+résultats **fractionnaires** (entre 25 % et 75 % de positifs) : c'est à ce
+niveau que l'on peut voir une différence entre méthodes.
+
+**Indicateurs** :
+
+- **POD** (*probability of detection*) = nombre de positifs / nombre de
+  portions, avec un intervalle de confiance (IC) de Wilson à 95 % ;
+- **dPOD** = POD candidate − POD référence. Si l'IC à 95 % de la dPOD
+  contient 0, la différence n'est pas statistiquement significative.
+
+```{r}
+#| label: tab-pod
+t <- mat$tableau
+aff <- data.frame(
+  Matrice = t$matrice, Niveau = t$niveau_cible,
+  `POD candidate` = sprintf("%d/%d = %s [%s ; %s]", t$x_candidate, t$n_candidate,
+                            f2(t$pod_candidate), f2(t$pod_c_bas), f2(t$pod_c_haut)),
+  `POD référence` = sprintf("%d/%d = %s [%s ; %s]", t$x_reference, t$n_reference,
+                            f2(t$pod_reference), f2(t$pod_r_bas), f2(t$pod_r_haut)),
+  dPOD = sprintf("%s [%s ; %s]", f2(t$dpod), f2(t$dpod_bas), f2(t$dpod_haut)),
+  Significatif = ifelse(t$difference_significative, "oui", "non"),
+  check.names = FALSE)
+tableau(aff)
+```
+
+![POD et dPOD par matrice et par niveau](`r fig("pod_dpod_etude_matrice.png")`)
+
+**Lecture.** `r if (any(t$difference_significative)) paste(sum(t$difference_significative), "dPOD sur", nrow(t), "est (sont) significative(s).") else "Aucune dPOD n'est significative."`
+Avec 20 portions au niveau bas, les intervalles sont larges (demi-largeur de
+l'IC de la dPOD au niveau bas : environ
+`r f2(mean((t$dpod_haut - t$dpod_bas)[t$niveau_cible == cfg$etude_matrice$niveaux_ufc$bas]) / 2)`).
+Ne pas trouver de différence ne prouve pas que les méthodes sont
+équivalentes ; cela montre surtout les limites de puissance d'un plan à
+20 portions. Note : quelques
+lignes ont été exclues par le contrôle qualité, d'où des effectifs parfois
+inférieurs au plan.
+
+# Niveau de détection : LOD50 et RLOD
+
+**Plan** : `r length(cfg$etude_lod$niveaux_ufc)` niveaux
+(`r paste(format(cfg$etude_lod$niveaux_ufc, decimal.mark = ",", drop0trailing = TRUE, trim = TRUE), collapse = " ; ")` UFC par portion),
+`r cfg$etude_lod$replicats` portions par niveau et par méthode.
+
+**Modèle** : si le nombre de cellules d'une portion suit une loi de Poisson de
+moyenne λ et que chaque cellule est détectée avec une probabilité *r*, alors
+POD(λ) = 1 − exp(−*r* λ). C'est un modèle linéaire généralisé binomial avec
+un lien log-log complémentaire. La **LOD50** est le niveau pour lequel
+POD = 0,5, soit LOD50 = ln(2) / *r*. Le **RLOD** (niveau de détection relatif)
+est le rapport LOD50 candidate / LOD50 référence : un RLOD inférieur à 1
+signifie que la candidate détecte des niveaux plus faibles.
+
+```{r}
+#| label: tab-lod
+l <- lod$lod50
+tableau(data.frame(
+  Méthode = l$methode,
+  `LOD50 estimée (UFC)` = sprintf("%s [%s ; %s]", f2(l$lod50_estimee),
+                                  f2(l$ic_bas), f2(l$ic_haut)),
+  `Valeur vraie (simulation)` = f2(l$lod50_vraie_simulation),
+  `Pente libre` = f2(l$pente_libre),
+  `p (test pente = 1)` = f2(l$p_test_pente_1, 3),
+  check.names = FALSE))
+```
+
+RLOD estimé : **`r f2(lod$rlod$rlod)`** (IC à 95 % :
+`r f2(lod$rlod$ic_bas)` à `r f2(lod$rlod$ic_haut)`), pour une valeur vraie de
+`r f2(lod$rlod$rlod_vrai)` dans la simulation.
+
+![Courbes POD en fonction du niveau d'inoculation](`r fig("courbes_lod50.png")`)
+
+```{r}
+#| label: lecture-lod
+couvre <- l$ic_bas <= l$lod50_vraie_simulation & l$ic_haut >= l$lod50_vraie_simulation
+couvre_rlod <- lod$rlod$ic_bas <= lod$rlod$rlod_vrai & lod$rlod$ic_haut >= lod$rlod$rlod_vrai
+inverse <- (lod$rlod$rlod > 1) != (lod$rlod$rlod_vrai > 1)
+```
+
+**Lecture.** `r if (all(couvre) && couvre_rlod) "Les IC à 95 % des LOD50 et du RLOD contiennent les vraies valeurs de la simulation." else "Au moins un IC à 95 % ne contient pas la vraie valeur : cela arrive environ une fois sur vingt par construction."`
+`r if (inverse) "Pourtant, l'estimation ponctuelle du RLOD est du « mauvais côté » de 1 : avec 100 portions par méthode, le hasard suffit à inverser l'ordre apparent de deux méthodes proches." else "L'estimation ponctuelle du RLOD va dans le même sens que la vérité de la simulation."`
+Le test de la pente (rapport de vraisemblance) `r if (all(l$p_test_pente_1 > 0.05)) "ne rejette pas" else "rejette"` le modèle « à un coup » (pente = 1) au seuil de 5 %.
+
+# Étude interlaboratoires
+
+**Plan** : `r il$n_labos` laboratoires, `r cfg$etude_interlabo$replicats`
+portions par niveau et par méthode dans chaque laboratoire.
+
+- **LPOD** : POD calculée sur tous les laboratoires réunis ;
+- **dLPOD** : LPOD candidate − LPOD référence ;
+- **modèle mixte** (lme4) : sépare l'effet de la méthode et la variabilité
+  entre laboratoires (effet aléatoire).
+
+**Procédure** (annexe de calcul de l'AOAC pour les études
+collaboratives) : analyse de variance des résultats 0/1 (répétabilité
+*s~r~*, part laboratoire *s~L~*, reproductibilité *s~R~*), écart-type des POD
+des laboratoires, degrés de liberté de Satterthwaite, puis IC de Student
+si 0,15 ≤ LPOD ≤ 0,85 et IC de Wilson sinon. L'IC de la dLPOD combine les
+bornes des deux LPOD, comme pour la dPOD.
+
+```{r}
+#| label: tab-lpod
+p <- il$lpod
+tableau(data.frame(
+  Niveau = p$niveau_cible,
+  `LPOD candidate` = sprintf("%s [%s ; %s]", f2(p$lpod_candidate),
+                             f2(p$lpod_c_bas), f2(p$lpod_c_haut)),
+  `s_r / s_L (cand.)` = sprintf("%s / %s", f2(p$s_r_candidate), f2(p$s_L_candidate)),
+  `IC (ddl)` = ifelse(p$methode_ic_candidate == "Wilson", "Wilson",
+                      paste0("Student (", f2(p$ddl_candidate, 1), ")")),
+  `LPOD référence` = sprintf("%s [%s ; %s]", f2(p$lpod_reference),
+                             f2(p$lpod_r_bas), f2(p$lpod_r_haut)),
+  dLPOD = sprintf("%s [%s ; %s]", f2(p$dlpod), f2(p$dlpod_bas), f2(p$dlpod_haut)),
+  check.names = FALSE))
+```
+
+::: {.callout-note}
+La formule exacte des degrés de liberté de Satterthwaite était illisible
+dans les copies du texte de l'AOAC consultées. La forme utilisée,
+(s~L~²/L + s~r~²/N)² / [(s~L~²/L)²/(L − 1) + (s~r~²/N)²/(N − L)], est
+cohérente avec les éléments lisibles ; elle doit être vérifiée dans le
+document original avant un usage réel.
+:::
+
+**Modèle mixte.** Les intervalles de confiance sont obtenus par profil de
+vraisemblance. Les LOD50 sont celles d'un **laboratoire médian** (effet
+laboratoire nul), et non la moyenne des POD de tous les laboratoires.
+
+```{r}
+#| label: tab-mixte
+m <- il$mixte
+tableau(data.frame(Paramètre = m$parametre,
+                   `Estimation [IC 95 %]` = sprintf("%s [%s ; %s]", f2(m$estimation),
+                                                    f2(m$ic_bas), f2(m$ic_haut)),
+                   `Valeur vraie (simulation)` = f2(m$valeur_vraie_simulation),
+                   `Vraie valeur dans l'IC` = ifelse(m$vraie_valeur_dans_ic, "oui", "non"),
+                   check.names = FALSE))
+```
+
+![POD par laboratoire au niveau bas](`r fig("pod_par_laboratoire.png")`)
+
+**Faux positifs** (portions non inoculées, tous laboratoires) :
+`r il$faux_positifs$faux_positifs[1]`/`r il$faux_positifs$n[1]` pour la
+candidate (borne haute de l'IC : `r pc(il$faux_positifs$ic_haut[1], 1)`),
+`r il$faux_positifs$faux_positifs[2]`/`r il$faux_positifs$n[2]` pour la
+référence.
+
+# Plans d'expériences
+
+## Criblage : plan factoriel fractionnaire 2^5−1^
+
+Cinq paramètres physiques sont étudiés en
+`r nrow(crib$essais)` essais (16 essais factoriels + 4 points au centre).
+Générateur du plan : `r crib$generateur` (résolution V).
+
+```{r}
+#| label: tab-facteurs
+tableau(crib$legende, col.names = c("Code", "Facteur", "Niveau bas",
+                                    "Niveau haut", "Unité"))
+```
+
+```{r}
+#| label: tab-effets
+e <- crib$effets
+tableau(data.frame(Terme = e$terme, Effet = f2(e$effet),
+                   `Erreur type (coef.)` = f2(e$erreur_type, 3),
+                   `p-valeur` = formatC(e$p_valeur, format = "g", digits = 2),
+                   check.names = FALSE))
+```
+
+![Diagramme de Pareto des effets](`r fig("plan_criblage_pareto.png")`)
+
+**Lecture.** La température (A), la durée d'enrichissement (B), leur
+interaction (A:B) et la concentration en substrat (C) ont des effets nets. Le
+terme « centre » mesure l'écart entre la moyenne des points au centre et celle
+des essais factoriels : il est significatif, ce qui révèle une **courbure**. Un
+plan à deux niveaux ne peut pas la modéliser, d'où l'étape suivante. Le modèle
+n'a que `r crib$residus_df` degrés de liberté résiduels (issus des répétitions
+au centre) : les p-valeurs sont à lire avec prudence.
+
+## Optimisation : plan composite centré et surface de réponse
+
+La température et la durée sont étudiées avec un plan composite centré
+(`r nrow(ccd$essais)` essais). La concentration en substrat est fixée au niveau
+haut ; le volume et le gain, sans effet net, sont fixés au niveau bas.
+
+Avant de construire le plan, le script vérifie que les points axiaux
+restent dans les **limites physiques** déclarées dans `config.yml`
+(température `r cfg$plan_experiences$limites_physiques$temperature$min`–`r cfg$plan_experiences$limites_physiques$temperature$max` °C,
+durée `r cfg$plan_experiences$limites_physiques$duree_enrichissement$min`–`r cfg$plan_experiences$limites_physiques$duree_enrichissement$max` h).
+Choix retenu : points axiaux **`r ccd$choix_alpha$alpha`**
+(α = `r f2(ccd$choix_alpha$valeur, 3)`). Sinon, le plan aurait basculé
+automatiquement sur des points axiaux placés sur les faces du carré (α = 1).
+
+```{r}
+#| label: tab-alpha
+ta <- ccd$choix_alpha$tableau
+tableau(data.frame(Facteur = ta$facteur, `Point axial bas` = f2(ta$axial_bas, 1),
+                   `Point axial haut` = f2(ta$axial_haut, 1),
+                   `Limite min` = ta$limite_min, `Limite max` = ta$limite_max,
+                   check.names = FALSE))
+```
+
+```{r}
+#| label: tab-ccd
+o <- ccd$optimum
+tableau(data.frame(Grandeur = o$grandeur, `Estimation du plan` = f2(o$estimation_plan, 1),
+                   `Valeur vraie (simulation)` = f2(o$valeur_vraie_simulation, 1),
+                   check.names = FALSE))
+```
+
+Le point stationnaire est un **`r ccd$type_point`** (valeurs propres :
+`r paste(f2(ccd$valeurs_propres), collapse = " et ")`). R² du modèle :
+`r f2(ccd$r2)`.
+
+![Surface de réponse : rapport signal/bruit prédit](`r fig("plan_composite_surface.png")`)
+
+**Lecture.** L'écart entre l'optimum estimé et l'optimum de la loi cachée est
+de `r f2(abs(o$estimation_plan[1] - o$valeur_vraie_simulation[1]), 1)` °C pour
+la température et de
+`r f2(abs(o$estimation_plan[2] - o$valeur_vraie_simulation[2]), 1)` h pour la
+durée. Dans un vrai projet, l'optimum ne serait adopté qu'après des **essais
+de confirmation** à ce réglage, surtout s'il est proche du bord du domaine
+étudié (ici, la durée maximale du criblage était de
+`r cfg$plan_experiences$facteurs$duree_enrichissement$haut` h).
+
+# Traçabilité
+
+Chaque exécution du pipeline produit :
+
+- `output/tracabilite/manifeste_entrees.csv` : liste des fichiers bruts lus,
+  avec leur empreinte SHA-256 (un seul caractère modifié change l'empreinte) ;
+- `output/tracabilite/journal.csv` : journal horodaté de chaque étape ;
+- `output/tracabilite/environnement_execution.csv` : versions de R et des
+  packages, identifiant du commit Git ;
+- `output/qc/registre_anomalies.csv` : registre des anomalies.
+
+```{r}
+#| label: manifeste
+mf <- qc$manifeste
+mf$sha256 <- paste0(substr(mf$sha256, 1, 16), "…")
+tableau(mf[, c("fichier", "n_lignes_donnees", "sha256")],
+        col.names = c("Fichier", "Lignes", "SHA-256 (début)"))
+```
+
+# Dictionnaire et restitution des variables
+
+Chaque fichier du projet est décrit dans `config/dictionnaire_variables.yml`
+(type, unité, valeurs permises, bornes, définition). Le script 08 vérifie
+que les fichiers produits correspondent **exactement** au dictionnaire : pas
+de colonne non documentée, pas de colonne manquante, types et valeurs
+conformes. Un écart arrête le pipeline.
+
+```{r}
+#| label: dico-bilan
+ctl <- dico$controles
+bil <- aggregate(statut ~ jeu_de_donnees, data = ctl,
+                 FUN = function(x) sprintf("%d / %d", sum(x == "conforme"), length(x)))
+nvar <- aggregate(variable ~ jeu_de_donnees, data = dico$dictionnaire, FUN = length)
+bil <- merge(nvar, bil)
+tableau(bil, col.names = c("Jeu de données", "Variables documentées",
+                           "Contrôles conformes"))
+```
+
+**`r sum(ctl$statut == "conforme")` contrôles conformes sur
+`r nrow(ctl)`** pour `r nrow(dico$dictionnaire)` variables documentées.
+
+::: {.callout-tip collapse="true"}
+## Dictionnaire complet des variables (cliquer pour ouvrir)
+
+```{r}
+#| label: dico-complet
+dd <- dico$dictionnaire
+tableau(data.frame(Jeu = dd$jeu_de_donnees, Variable = dd$variable,
+                   Type = dd$type, Unité = dd$unite,
+                   `Valeurs / bornes` = trimws(paste(dd$valeurs_permises,
+                     ifelse(is.na(dd$minimum), "", paste("min", dd$minimum)),
+                     ifelse(is.na(dd$maximum), "", paste("max", dd$maximum)))),
+                   Description = dd$description, check.names = FALSE))
+```
+:::
+
+**Restitution des variables** des données validées (une ligne par portion
+retenue après contrôle qualité) :
+
+```{r}
+#| label: resume-var
+rv <- dico$resumes[dico$resumes$jeu_de_donnees == "portions_validees", ]
+num <- function(x) ifelse(is.na(x), "", f2(x))
+tableau(data.frame(Variable = rv$variable, Type = rv$type, n = rv$n,
+                   Manquants = rv$manquants, Min = num(rv$minimum),
+                   Médiane = num(rv$mediane), Max = num(rv$maximum),
+                   Modalités = rv$modalites, check.names = FALSE))
+```
+
+Le résumé de toutes les variables de tous les fichiers est dans
+`output/dictionnaire/resume_variables.csv`.
+
+# Reproductibilité
+
+L'étude est **entièrement reproductible** : une seule commande
+(`Rscript executer_pipeline.R`) refait tout, de la simulation des données
+brutes (graine `r cfg$graine`) jusqu'aux tables de résultats. Le script 09
+compare ensuite, valeur par valeur, chaque fichier produit à une
+**exécution de référence** enregistrée dans le dossier `reference/`.
+
+```{r}
+#| label: repro
+vr <- repro$verification
+tableau(as.data.frame(table(Statut = vr$statut)),
+        col.names = c("Statut", "Nombre de fichiers"))
+```
+
+Référence : `r paste(grep("^(Créée|R :|Système)", repro$reference, value = TRUE), collapse = " ; ")`.
+Tolérance relative pour les nombres : `r format(cfg$reproductibilite$tolerance_relative, scientific = TRUE)`.
+
+```{r}
+#| label: repro-diff
+#| results: asis
+diffs <- vr[grepl("DIFFÉRENT|ABSENT", vr$statut), ]
+if (nrow(diffs) > 0) {
+  cat("::: {.callout-warning}\n## Fichiers différents de la référence\n\n")
+  print(knitr::kable(diffs))
+  cat("\n\nUne différence peut venir d'une autre version de R ou d'un",
+      "package (par exemple l'optimiseur de lme4). À examiner avant de",
+      "conclure.\n:::\n")
+} else {
+  cat("Aucune différence avec la référence.\n")
+}
+```
+
+# Limites
+
+- Les données sont **simulées** : elles suivent exactement les hypothèses des
+  modèles (loi de Poisson, détection indépendante des cellules), ce qui n'est
+  jamais tout à fait le cas au laboratoire.
+- La formule des degrés de liberté de la LPOD (Satterthwaite) a été
+  reconstruite à partir d'une copie partiellement illisible du texte AOAC.
+- Le projet ne couvre pas l'inclusivité/exclusivité (souches cibles et non
+  cibles), la confirmation des résultats présomptifs, ni la robustesse au sens
+  de l'AOAC.
+- La démarche s'**inspire** de l'AOAC Appendix J et de l'ISO 16140-2 ; elle
+  n'est pas une validation conforme à ces référentiels.
+- Le niveau d'inoculation est supposé connu ; en réalité, il est estimé (par
+  exemple par la méthode du nombre le plus probable, NPP).

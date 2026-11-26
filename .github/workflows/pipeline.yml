@@ -1,0 +1,84 @@
+# =====================================================================
+# Pipeline automatique (GitHub Actions)
+# À chaque "push" sur la branche main (ou lancement manuel) :
+#   1. installe R, les packages et Quarto
+#   2. exécute tout le pipeline (simulation -> QC -> analyses)
+#   3. lance les tests automatiques
+#   4. génère le rapport Quarto
+#   5. publie le rapport sur GitHub Pages
+#   6. garde les sorties (traçabilité, tables) comme "artefact"
+# =====================================================================
+name: pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Installer les packages R (lus dans DESCRIPTION)
+        uses: r-lib/actions/setup-r-dependencies@v2
+
+      - name: Installer Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Exécuter le pipeline complet
+        run: Rscript executer_pipeline.R
+
+      - name: Lancer les tests
+        run: Rscript tests/lancer_tests.R
+
+      - name: Générer le rapport
+        run: quarto render rapport/index.qmd
+
+      - name: Préparer le site
+        run: |
+          mkdir -p _site
+          cp rapport/index.html _site/index.html
+
+      - name: Garder les sorties (traçabilité, tables, QC)
+        uses: actions/upload-artifact@v7
+        with:
+          name: sorties-pipeline
+          path: |
+            output/
+            data/processed/
+
+      - name: Envoyer le site à GitHub Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  publication:
+    needs: analyse
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - name: Publier sur GitHub Pages
+        id: deploiement
+        uses: actions/deploy-pages@v5

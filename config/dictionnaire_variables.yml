@@ -1,0 +1,253 @@
+# =====================================================================
+# Dictionnaire des variables
+# ---------------------------------------------------------------------
+# Chaque fichier de données du projet et chaque colonne y sont décrits :
+# type, unité, valeurs permises, définition.
+# Le script scripts/08_dictionnaire_variables.R vérifie automatiquement
+# que les fichiers produits correspondent EXACTEMENT à ce dictionnaire
+# (aucune colonne non documentée, aucune colonne documentée absente,
+# types et valeurs conformes).
+#
+# Types : texte, numerique, entier, logique, date
+# controler_valeurs : false pour les fichiers BRUTS, qui contiennent
+#   volontairement des erreurs (elles sont traitées par le contrôle
+#   qualité, script 02). Seuls les colonnes et les types sont vérifiés.
+# =====================================================================
+
+jeux_de_donnees:
+
+  # ------------------------------------------------------------------
+  - nom: instrument_brut
+    fichiers: "data/raw/instrument/*.csv"
+    description: "Export brut de la méthode candidate (un signal par portion)"
+    controler_valeurs: false
+    variables:
+      - {nom: id_echantillon, type: texte, unite: "", description: "Identifiant unique de la portion"}
+      - {nom: etude, type: texte, unite: "", valeurs: [matrice, lod, interlabo], description: "Étude à laquelle appartient la portion"}
+      - {nom: matrice, type: texte, unite: "", valeurs: [acier_inoxydable, plastique], description: "Surface prélevée"}
+      - {nom: niveau_cible, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau d'inoculation moyen visé (0 = non inoculé)"}
+      - {nom: laboratoire, type: texte, unite: "", description: "Code du laboratoire (LAB01 à LAB12)"}
+      - {nom: operateur, type: texte, unite: "", description: "Code de l'opérateur"}
+      - {nom: instrument, type: texte, unite: "", description: "Identifiant de la chambre optique"}
+      - {nom: date_analyse, type: date, unite: "AAAA-MM-JJ", description: "Date de l'analyse"}
+      - {nom: signal_rfu, type: numerique, unite: "RFU", description: "Signal de fluorescence mesuré"}
+
+  # ------------------------------------------------------------------
+  - nom: reference_brut
+    fichiers: "data/raw/reference/*.csv"
+    description: "Résultats bruts de la méthode de référence (culture)"
+    controler_valeurs: false
+    variables:
+      - {nom: id_echantillon, type: texte, unite: "", description: "Identifiant unique de la portion"}
+      - {nom: etude, type: texte, unite: "", valeurs: [matrice, lod, interlabo], description: "Étude à laquelle appartient la portion"}
+      - {nom: matrice, type: texte, unite: "", valeurs: [acier_inoxydable, plastique], description: "Surface prélevée"}
+      - {nom: niveau_cible, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau d'inoculation moyen visé"}
+      - {nom: laboratoire, type: texte, unite: "", description: "Code du laboratoire"}
+      - {nom: date_analyse, type: date, unite: "AAAA-MM-JJ", description: "Date de l'analyse"}
+      - {nom: resultat_ref, type: texte, unite: "", description: "Résultat de la culture (positif / negatif attendus)"}
+
+  # ------------------------------------------------------------------
+  - nom: portions_validees
+    fichiers: "data/processed/resultats_portions.csv"
+    description: "Toutes les portions retenues après contrôle qualité, les deux méthodes"
+    controler_valeurs: true
+    variables:
+      - {nom: id_echantillon, type: texte, unite: "", description: "Identifiant unique de la portion"}
+      - {nom: etude, type: texte, unite: "", valeurs: [matrice, lod, interlabo], description: "Étude"}
+      - {nom: matrice, type: texte, unite: "", valeurs: [acier_inoxydable, plastique], description: "Surface prélevée"}
+      - {nom: niveau_cible, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau d'inoculation moyen visé"}
+      - {nom: laboratoire, type: texte, unite: "", description: "Code du laboratoire"}
+      - {nom: date_analyse, type: date, unite: "AAAA-MM-JJ", description: "Date de l'analyse (dans la période d'étude)"}
+      - {nom: methode, type: texte, unite: "", valeurs: [candidate, reference], description: "Méthode d'analyse"}
+      - {nom: signal_rfu, type: numerique, unite: "RFU", min: 0, max: 65535, description: "Signal de la candidate (vide pour la référence)"}
+      - {nom: positif, type: entier, unite: "", valeurs: [0, 1], description: "Résultat : 1 = positif, 0 = négatif (candidate : signal >= seuil)"}
+
+  # ------------------------------------------------------------------
+  - nom: registre_anomalies
+    fichiers: "output/qc/registre_anomalies.csv"
+    description: "Une ligne par anomalie détectée par le contrôle qualité"
+    controler_valeurs: true
+    variables:
+      - {nom: fichier, type: texte, unite: "", description: "Fichier brut concerné"}
+      - {nom: id_echantillon, type: texte, unite: "", description: "Portion concernée"}
+      - {nom: regle, type: texte, unite: "", valeurs: [doublon_exact, identifiant_en_conflit, niveau_invalide, date_hors_periode, signal_manquant, signal_impossible, signal_sature, resultat_non_autorise], description: "Règle de contrôle non respectée"}
+      - {nom: gravite, type: texte, unite: "", valeurs: [bloquant, avertissement], description: "bloquant = ligne exclue ; avertissement = ligne gardée"}
+      - {nom: detail, type: texte, unite: "", description: "Explication lisible"}
+
+  # ------------------------------------------------------------------
+  - nom: manifeste_entrees
+    fichiers: "output/tracabilite/manifeste_entrees.csv"
+    description: "Liste des fichiers bruts lus, avec leur empreinte"
+    controler_valeurs: true
+    variables:
+      - {nom: fichier, type: texte, unite: "", description: "Chemin du fichier lu"}
+      - {nom: taille_octets, type: entier, unite: "octets", min: 0, description: "Taille du fichier"}
+      - {nom: n_lignes_donnees, type: entier, unite: "lignes", min: 0, description: "Nombre de lignes hors en-tête"}
+      - {nom: sha256, type: texte, unite: "", description: "Empreinte SHA-256 (64 caractères hexadécimaux)"}
+
+  # ------------------------------------------------------------------
+  - nom: pod_dpod_etude_matrice
+    fichiers: "output/tables/pod_dpod_etude_matrice.csv"
+    description: "Étude de matrice : POD par méthode et dPOD, par matrice et niveau"
+    controler_valeurs: true
+    variables:
+      - {nom: matrice, type: texte, unite: "", valeurs: [acier_inoxydable, plastique], description: "Surface"}
+      - {nom: niveau_cible, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau d'inoculation"}
+      - {nom: n_candidate, type: entier, unite: "portions", min: 1, description: "Portions analysées, candidate"}
+      - {nom: x_candidate, type: entier, unite: "portions", min: 0, description: "Portions positives, candidate"}
+      - {nom: pod_candidate, type: numerique, unite: "proportion", min: 0, max: 1, description: "POD candidate = x/n"}
+      - {nom: pod_c_bas, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne basse IC 95 % (Wilson), candidate"}
+      - {nom: pod_c_haut, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne haute IC 95 % (Wilson), candidate"}
+      - {nom: n_reference, type: entier, unite: "portions", min: 1, description: "Portions analysées, référence"}
+      - {nom: x_reference, type: entier, unite: "portions", min: 0, description: "Portions positives, référence"}
+      - {nom: pod_reference, type: numerique, unite: "proportion", min: 0, max: 1, description: "POD référence"}
+      - {nom: pod_r_bas, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne basse IC 95 %, référence"}
+      - {nom: pod_r_haut, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne haute IC 95 %, référence"}
+      - {nom: dpod, type: numerique, unite: "différence de proportions", min: -1, max: 1, description: "POD candidate - POD référence"}
+      - {nom: dpod_bas, type: numerique, unite: "différence de proportions", min: -1, max: 1, description: "Borne basse IC 95 % de la dPOD"}
+      - {nom: dpod_haut, type: numerique, unite: "différence de proportions", min: -1, max: 1, description: "Borne haute IC 95 % de la dPOD"}
+      - {nom: difference_significative, type: logique, unite: "", description: "VRAI si l'IC de la dPOD exclut 0"}
+
+  # ------------------------------------------------------------------
+  - nom: lod50
+    fichiers: "output/tables/lod50.csv"
+    description: "LOD50 par méthode (modèle de Poisson, lien cloglog)"
+    controler_valeurs: true
+    variables:
+      - {nom: methode, type: texte, unite: "", valeurs: [candidate, reference], description: "Méthode"}
+      - {nom: lod50_estimee, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau pour lequel POD = 0,5"}
+      - {nom: ic_bas, type: numerique, unite: "UFC par portion", min: 0, description: "Borne basse IC 95 % (profil de vraisemblance)"}
+      - {nom: ic_haut, type: numerique, unite: "UFC par portion", min: 0, description: "Borne haute IC 95 %"}
+      - {nom: lod50_vraie_simulation, type: numerique, unite: "UFC par portion", min: 0, description: "Vraie valeur fixée dans la simulation"}
+      - {nom: pente_libre, type: numerique, unite: "", description: "Pente estimée si on ne la fixe pas à 1"}
+      - {nom: p_test_pente_1, type: numerique, unite: "", min: 0, max: 1, description: "p-valeur du test pente = 1 (rapport de vraisemblance)"}
+
+  # ------------------------------------------------------------------
+  - nom: rlod
+    fichiers: "output/tables/rlod.csv"
+    description: "Niveau de détection relatif (candidate / référence)"
+    controler_valeurs: true
+    variables:
+      - {nom: rlod, type: numerique, unite: "rapport", min: 0, description: "LOD50 candidate / LOD50 référence"}
+      - {nom: ic_bas, type: numerique, unite: "rapport", min: 0, description: "Borne basse IC 95 %"}
+      - {nom: ic_haut, type: numerique, unite: "rapport", min: 0, description: "Borne haute IC 95 %"}
+      - {nom: p_valeur, type: numerique, unite: "", min: 0, max: 1, description: "Test de l'égalité des deux méthodes (Wald)"}
+      - {nom: rlod_vrai, type: numerique, unite: "rapport", min: 0, description: "Vraie valeur de la simulation"}
+
+  # ------------------------------------------------------------------
+  - nom: pod_par_laboratoire
+    fichiers: "output/tables/pod_par_laboratoire.csv"
+    description: "Étude interlaboratoires : POD de chaque laboratoire"
+    controler_valeurs: true
+    variables:
+      - {nom: laboratoire, type: texte, unite: "", description: "Code du laboratoire"}
+      - {nom: methode, type: texte, unite: "", valeurs: [candidate, reference], description: "Méthode"}
+      - {nom: niveau_cible, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau d'inoculation"}
+      - {nom: x, type: entier, unite: "portions", min: 0, description: "Portions positives"}
+      - {nom: "n", type: entier, unite: "portions", min: 1, description: "Portions analysées"}
+      - {nom: pod, type: numerique, unite: "proportion", min: 0, max: 1, description: "POD du laboratoire = x/n"}
+
+  # ------------------------------------------------------------------
+  - nom: lpod_dlpod
+    fichiers: "output/tables/lpod_dlpod.csv"
+    description: "Étude interlaboratoires : LPOD et dLPOD (procédure AOAC en 6 étapes)"
+    controler_valeurs: true
+    variables:
+      - {nom: niveau_cible, type: numerique, unite: "UFC par portion", min: 0, description: "Niveau d'inoculation"}
+      - {nom: lpod_candidate, type: numerique, unite: "proportion", min: 0, max: 1, description: "LPOD candidate (tous laboratoires réunis)"}
+      - {nom: lpod_c_bas, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne basse IC 95 %, candidate"}
+      - {nom: lpod_c_haut, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne haute IC 95 %, candidate"}
+      - {nom: s_r_candidate, type: numerique, unite: "écart-type", min: 0, description: "Écart-type de répétabilité (intra-laboratoire)"}
+      - {nom: s_L_candidate, type: numerique, unite: "écart-type", min: 0, description: "Écart-type de la part laboratoire"}
+      - {nom: s_R_candidate, type: numerique, unite: "écart-type", min: 0, description: "Écart-type de reproductibilité"}
+      - {nom: ddl_candidate, type: numerique, unite: "degrés de liberté", min: 0, description: "Degrés de liberté (Satterthwaite)"}
+      - {nom: methode_ic_candidate, type: texte, unite: "", valeurs: ["Student (Satterthwaite)", "Wilson"], description: "Méthode d'IC utilisée"}
+      - {nom: lpod_reference, type: numerique, unite: "proportion", min: 0, max: 1, description: "LPOD référence"}
+      - {nom: lpod_r_bas, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne basse IC 95 %, référence"}
+      - {nom: lpod_r_haut, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne haute IC 95 %, référence"}
+      - {nom: s_r_reference, type: numerique, unite: "écart-type", min: 0, description: "Répétabilité, référence"}
+      - {nom: s_L_reference, type: numerique, unite: "écart-type", min: 0, description: "Part laboratoire, référence"}
+      - {nom: s_R_reference, type: numerique, unite: "écart-type", min: 0, description: "Reproductibilité, référence"}
+      - {nom: ddl_reference, type: numerique, unite: "degrés de liberté", min: 0, description: "Degrés de liberté, référence"}
+      - {nom: methode_ic_reference, type: texte, unite: "", valeurs: ["Student (Satterthwaite)", "Wilson"], description: "Méthode d'IC utilisée"}
+      - {nom: dlpod, type: numerique, unite: "différence de proportions", min: -1, max: 1, description: "LPOD candidate - LPOD référence"}
+      - {nom: dlpod_bas, type: numerique, unite: "différence de proportions", min: -1, max: 1, description: "Borne basse IC 95 % de la dLPOD"}
+      - {nom: dlpod_haut, type: numerique, unite: "différence de proportions", min: -1, max: 1, description: "Borne haute IC 95 % de la dLPOD"}
+      - {nom: difference_significative, type: logique, unite: "", description: "VRAI si l'IC de la dLPOD exclut 0"}
+
+  # ------------------------------------------------------------------
+  - nom: modele_mixte_interlabo
+    fichiers: "output/tables/modele_mixte_interlabo.csv"
+    description: "Modèle linéaire généralisé mixte (lme4), étude interlaboratoires"
+    controler_valeurs: true
+    variables:
+      - {nom: parametre, type: texte, unite: "", description: "Paramètre estimé"}
+      - {nom: estimation, type: numerique, unite: "voir paramètre", min: 0, description: "Estimation ponctuelle"}
+      - {nom: ic_bas, type: numerique, unite: "voir paramètre", min: 0, description: "Borne basse IC 95 % (profil de vraisemblance)"}
+      - {nom: ic_haut, type: numerique, unite: "voir paramètre", min: 0, description: "Borne haute IC 95 %"}
+      - {nom: valeur_vraie_simulation, type: numerique, unite: "voir paramètre", min: 0, description: "Vraie valeur de la simulation"}
+      - {nom: vraie_valeur_dans_ic, type: logique, unite: "", description: "VRAI si la vraie valeur est dans l'IC"}
+
+  # ------------------------------------------------------------------
+  - nom: faux_positifs_interlabo
+    fichiers: "output/tables/faux_positifs_interlabo.csv"
+    description: "Faux positifs sur les portions non inoculées (tous laboratoires)"
+    controler_valeurs: true
+    variables:
+      - {nom: methode, type: texte, unite: "", valeurs: [candidate, reference], description: "Méthode"}
+      - {nom: faux_positifs, type: entier, unite: "portions", min: 0, description: "Portions non inoculées trouvées positives"}
+      - {nom: "n", type: entier, unite: "portions", min: 1, description: "Portions non inoculées analysées"}
+      - {nom: taux, type: numerique, unite: "proportion", min: 0, max: 1, description: "Taux de faux positifs"}
+      - {nom: ic_bas, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne basse IC 95 % (Wilson)"}
+      - {nom: ic_haut, type: numerique, unite: "proportion", min: 0, max: 1, description: "Borne haute IC 95 %"}
+
+  # ------------------------------------------------------------------
+  - nom: plan_criblage_essais
+    fichiers: "output/tables/plan_criblage_essais.csv"
+    description: "Plan fractionnaire 2^(5-1) + 4 points au centre : réglages et réponse"
+    controler_valeurs: true
+    variables:
+      - {nom: ordre_essai, type: entier, unite: "", min: 1, description: "Ordre (aléatoire) de réalisation"}
+      - {nom: temperature, type: numerique, unite: "°C", min: 30, max: 37, description: "Température d'incubation (facteur A)"}
+      - {nom: duree_enrichissement, type: numerique, unite: "h", min: 6, max: 18, description: "Durée d'enrichissement (facteur B)"}
+      - {nom: concentration_substrat, type: numerique, unite: "mM", min: 0.5, max: 2, description: "Concentration du substrat (facteur C)"}
+      - {nom: volume_echantillon, type: numerique, unite: "mL", min: 0.5, max: 2, description: "Volume d'échantillon (facteur D)"}
+      - {nom: gain_detecteur, type: numerique, unite: "niveau", min: 1, max: 3, description: "Gain du photodétecteur (facteur E)"}
+      - {nom: sb, type: numerique, unite: "sans unité", description: "Rapport signal / bruit mesuré (simulé)"}
+
+  # ------------------------------------------------------------------
+  - nom: plan_criblage_effets
+    fichiers: "output/tables/plan_criblage_effets.csv"
+    description: "Effets estimés au criblage (unités codées)"
+    controler_valeurs: true
+    variables:
+      - {nom: terme, type: texte, unite: "", description: "Effet principal (A à E), interaction (A:B…) ou courbure (centre)"}
+      - {nom: coefficient, type: numerique, unite: "S/B", description: "Coefficient de régression en unités codées"}
+      - {nom: effet, type: numerique, unite: "S/B", description: "2 x coefficient (passage de -1 à +1) ; pour 'centre', le coefficient"}
+      - {nom: erreur_type, type: numerique, unite: "S/B", min: 0, description: "Erreur type du coefficient"}
+      - {nom: p_valeur, type: numerique, unite: "", min: 0, max: 1, description: "Test t du coefficient"}
+
+  # ------------------------------------------------------------------
+  - nom: plan_composite_essais
+    fichiers: "output/tables/plan_composite_essais.csv"
+    description: "Plan composite centré : réglages et réponse"
+    controler_valeurs: true
+    variables:
+      - {nom: run.order, type: entier, unite: "", min: 1, description: "Ordre de réalisation dans le bloc"}
+      - {nom: Block, type: entier, unite: "", valeurs: [1, 2], description: "Bloc (1 = carré + centres, 2 = axiaux + centres)"}
+      - {nom: temperature, type: numerique, unite: "°C", min: 25, max: 42, description: "Température (dans les limites physiques)"}
+      - {nom: duree_enrichissement, type: numerique, unite: "h", min: 2, max: 24, description: "Durée d'enrichissement (dans les limites physiques)"}
+      - {nom: concentration_substrat, type: numerique, unite: "mM", description: "Fixée au niveau haut"}
+      - {nom: volume_echantillon, type: numerique, unite: "mL", description: "Fixé au niveau bas"}
+      - {nom: gain_detecteur, type: numerique, unite: "niveau", description: "Fixé au niveau bas"}
+      - {nom: sb, type: numerique, unite: "sans unité", description: "Rapport signal / bruit mesuré (simulé)"}
+
+  # ------------------------------------------------------------------
+  - nom: plan_composite_optimum
+    fichiers: "output/tables/plan_composite_optimum.csv"
+    description: "Optimum estimé par la surface de réponse, comparé à la vérité"
+    controler_valeurs: true
+    variables:
+      - {nom: grandeur, type: texte, unite: "", description: "Grandeur comparée"}
+      - {nom: estimation_plan, type: numerique, unite: "voir grandeur", description: "Valeur estimée par le plan"}
+      - {nom: valeur_vraie_simulation, type: numerique, unite: "voir grandeur", description: "Valeur de la loi cachée"}

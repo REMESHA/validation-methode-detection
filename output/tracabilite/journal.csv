@@ -1,0 +1,15 @@
+horodatage;etape;message
+2026-11-27 00:33:52 SAST;00_debut;exécution complète du pipeline
+2026-11-27 00:33:56 SAST;01_simulation;graine = 2026
+2026-11-27 00:33:56 SAST;01_simulation;8 fichiers bruts écrits
+2026-11-27 00:33:56 SAST;02_qc;8 fichiers bruts lus et empreintés
+2026-11-27 00:33:56 SAST;02_qc;1180 portions valides , 6 anomalie(s) dont 5 bloquante(s)
+2026-11-27 00:34:02 SAST;03_pod;6 lignes POD/dPOD , différence significative : 0
+2026-11-27 00:34:03 SAST;04_lod50;LOD50 candidate = 1.50 UFC , référence = 1.42 UFC , RLOD = 1.06
+2026-11-27 00:34:19 SAST;05_interlabo;12 labos , écart-type labo estimé = 0.31
+2026-11-27 00:34:20 SAST;06_criblage;20 essais , courbure = 2.01 (p = 0.00332)
+2026-11-27 00:34:20 SAST;07_composite;points axiaux 'rotatable' (alpha = 1.414) : dans les limites physiques
+2026-11-27 00:34:21 SAST;07_composite;optimum (maximum) : 35.8 °C, 18.3 h , S/B prédit = 11.61
+2026-11-27 00:34:22 SAST;08_dictionnaire;16 jeux, 124 variables documentées, 288 contrôles, 0 non conforme(s)
+2026-11-27 00:34:22 SAST;09_reproductibilite;23 fichiers comparés : 20 identique(s), 1 à la tolérance près, 2 différent(s)
+2026-11-27 00:34:23 SAST;99_fin;pipeline terminé sans erreur
